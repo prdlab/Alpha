@@ -1,0 +1,728 @@
+---
+title: 'RFI Timecourse: Entrainment Task'
+author: "Andrew Zavala"
+date: "November 4, 2019"
+output:
+  pdf_document: default
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+For posters, figure size = 6.5" (height) x 10" (width)
+
+```{r Global Options, message=FALSE, warning=FALSE}
+library(tidyverse); library(ggthemes); library(rio); library(lsr)
+```
+
+
+```{r, Graphics Tuner}
+
+line_size = 2.3
+leftFrame_col = "royalblue"
+rightFrame_col = "firebrick2"
+upFrame_col = "grey24"
+text_size = 22 
+colour <- c("royalblue", "firebrick2")
+
+```
+
+```{r Import data, warning=FALSE, message=FALSE}
+setwd("/Users/MarekFirestone/Desktop/School/PRD Lab/Experiment stuff/Analysis/Experiment 1/Results Alpha/aaaaa")
+files <- list.files()
+data_raw <- NULL
+
+for(i in 1:length(files)){
+  
+  data_raw <- import(paste0(files[i]),
+                     na.strings = c("NULL")) %>% 
+    mutate(sid = i) %>%
+    rbind(data_raw)
+}
+
+#if you wanted to import all data as separate data frames
+#for(i in 1:length(files)){
+#  
+#  data_raw <- rio::import(paste0(files[i]),
+#                          na.strings = c("NULL")
+#  )
+#  assign(paste("subject-",i, sep=""),data_raw,.GlobalEnv)
+#}
+```
+
+
+```{r Housekeeping}
+
+alpha <- data_raw %>%  
+  janitor::clean_names() %>%
+  filter(trial_type == "real") %>% 
+  select(sid, everything()) %>% 
+  arrange(sid) %>%
+  
+  mutate(
+    probe_del_ms = round(probe_del * (16 + 2/3), 0),
+    
+    frame_orient = ifelse(frame_tilt == "-15", "Left", "Right"),
+    
+    stair_approach = ifelse(substr(trial_variant,2,2) == "L", "Left", "Right"),
+    
+    alpha_condition = ifelse(alpha_entrain_refreshes == 5, "Fast", "Slow"),
+    
+    alpha_condition = as.factor(alpha_condition))
+    
+    # In case I ever want to look at congruency effects ( re: Corbett, Handy & Enns (2009) )
+    # correct = ifelse(rod_tilt < 0 & response == 0 |
+    #                    rod_tilt > 0 & response == 1, "correct", "incorrect"),
+    # 
+    # congruence = ifelse(rod_tilt < 0 & frame_tilt == -15 |
+    #                       rod_tilt > 0 & frame_tilt == 15, "congruent", "incongruent" ))
+
+
+
+```    
+
+
+Group level analyses
+
+First determine the PSE (point of subjective equality) at each SOA. This will tell us the orientation at which the participant would be equally likely to report the rod as being tilted to the left or right of vertical. Next, determine the magnitude of the rod-and-frame effect (RFE; also referred to as rod-and-frame illusion or RFI). For each participant at each SOA, the RFE is determined by subracting the PSE in the left-tilted frame condition from the PSE in the right-tilted frame condition.   
+
+It is predicted that the RFE will become progressively larger as the SOA between the rod and frame decreases. The rationale being that the percieved orientation of the rod will be more influenced by the tilted frame (as reflected by changes in the PSE) when the rod and frame are presernted in closer temporal proximity. Furthermore, it is predicted that the RFE will reach a plateau when the rod and frame are presented simultaneously (i.e., SOA = 0) and remain at this maximum for rods presented after the frame (e.g., SOA = +200). 
+
+```{r, Raw PSE group data}
+# Calculate PSE for each participant SOA X Frame tilt condition
+
+data_pse <- alpha %>%
+  
+  filter(reversal_num > 6,
+         reversal == 1) %>%
+  
+  group_by(sid, frame_orient, probe_del_ms, alpha_condition) %>% 
+  summarise(pse = mean(rod_tilt))
+
+# data_pse2 <- data_pse %>%
+#   unite(delay_frame, probe_del_ms, frame_orient) %>%
+#   spread(delay_frame, pse)
+# 
+# write.table(data_pse, "LR_timecourse_long.csv", row.names = FALSE, sep = ",")
+# write.table(data_pse2, "LR_timecourse_wide.csv", row.names = FALSE, sep = ",")
+
+
+## Generate PSE plot (group average)
+
+plot_LR_frames <- data_pse %>% 
+  group_by(frame_orient, probe_del_ms, alpha_condition) %>%
+  summarize(mean_pse = mean(pse),
+            se_pse = sd(pse) / sqrt(length(files))) %>% 
+  
+  
+  ggplot(aes(probe_del_ms, mean_pse, color = frame_orient)) +
+  geom_vline(xintercept = 0, col = "grey29", linetype = 3, size = line_size) +
+  geom_line(aes(linetype = alpha_condition), size = line_size) +
+  geom_errorbar(aes(ymin = mean_pse - se_pse, ymax = mean_pse + se_pse),
+                width = 1.4, size = 1.4, 
+                position = "dodge") + 
+  
+  geom_point(shape = 21, size = 6, fill = "white") +
+  
+  #scale_y_continuous(breaks = seq(-4, 3, by = 1)) +
+  ylab(expression(paste("PSE (",degree,")"))) +
+  #xlab("\n Probe Lead                                      Probe Lag \n SOA (msec)") +
+  
+  theme_bw() +
+  
+  theme(axis.title = element_text(size = text_size))  +
+  theme(axis.title.x = element_blank()) +
+  theme(axis.text = element_text(size = text_size)) +
+  #theme(legend.position = "none") +
+  scale_colour_manual(values=colour) 
+
+plot_LR_frames
+
+
+# Copy into console for saving image
+# jpeg("lr_frames.jpg", quality = 100,
+#      width = 9.2, height = 6.4, units = 'in', res = 300)
+# plot_LR_frames # Make plot
+# dev.off()
+
+
+
+```
+
+
+
+#check with excel file - double check this
+```{r}
+data_pse <- alpha %>%
+  filter(reversal_num > 6,
+         reversal == 1) %>%
+  group_by(sid, frame_orient, probe_del_ms, alpha_condition) %>% 
+  summarise(pse = mean(rod_tilt))
+
+data_rfe <- data_pse %>%
+  unite(frame_col, "frame_orient", "alpha_condition") %>% 
+  spread(frame_col, pse) %>% 
+  mutate(rfe_fast = Right_Fast - Left_Fast,
+         rfe_slow = Right_Slow - Left_Slow) %>%
+  select(sid, probe_del_ms, rfe_fast, rfe_slow) %>% 
+  gather(rfe_type, rfe, -c(sid, probe_del_ms))
+
+data_rfeabsval <- data_pse %>%
+  unite(frame_col, "frame_orient", "alpha_condition") %>% 
+  spread(frame_col, pse) %>% 
+  mutate(rfe_fast = Right_Fast - Left_Fast,
+         rfe_slow = Right_Slow - Left_Slow,
+         rfe_fastabs = mean(c(abs(Left_Fast), Right_Fast)),
+         rfe_slowabs = mean(c(abs(Left_Slow), Right_Slow))) %>%
+  select(sid, probe_del_ms, rfe_fast, rfe_slow, rfe_fastabs, rfe_slowabs) %>% 
+  gather(rfe_type, rfe, -c(sid, probe_del_ms)) %>%
+  group_by(rfe_type,
+           probe_del_ms) %>%
+  summarise(m.rfe = mean(rfe))
+```
+
+*effect of difference between tilted frames*
+*try absolute value of left and average with right*
+
+Individual Graphs
+
+```{r}
+n = 38
+subject_graphs = vector('list', n)
+
+for (i in 1:n) {
+  subject_graphs[[i]] <- data_rfe %>%
+  filter(sid == i) %>%
+  ggplot(aes(probe_del_ms, rfe, color = rfe_type)) +
+  geom_line(aes(color = rfe_type)) +
+  theme_minimal()
+}
+
+subject_graphs[4]
+```
+
+Repeated Measures
+
+```{r}
+#data_rfe$probe_del_ms <- as.factor(data_rfe$probe_del_ms)
+data_rfe$rfe_type <- as.factor(data_rfe$rfe_type)
+
+#contrasts(data_rfe$probe_del_ms)
+contrasts(data_rfe$rfe_type)
+
+library(lme4)
+library(lmerTest)
+
+model_1 <- lmer(rfe ~ rfe_type*probe_del_ms + (1 | sid),
+     data = data_rfe)
+
+anova(model_1)
+
+model_2 <- lmer(rfe ~ rfe_type + probe_del_ms + (1 | sid),
+     data = data_rfe)
+
+anova(model_2)
+```
+
+Mean centered RM?
+Also need to check if they're normally distributed, data don't look normal
+
+```{r}
+data_rfe_c <- data_rfe %>%
+  mutate(rfe_c = scale(rfe, scale = FALSE))
+
+str(data_rfe_c)
+
+data_100 <- data_rfe_c %>% 
+  filter(probe_del_ms == -100) %>%
+  mutate(rfe_c = scale(rfe, scale = FALSE))
+
+data_50 <- data_rfe_c %>% 
+  filter(probe_del_ms == -50) %>%
+  mutate(rfe_c = scale(rfe, scale = FALSE))
+
+
+
+model_100c <- lmer(rfe_c ~ rfe_type + (1 | sid),
+     data = data_100)
+
+summary(model_100c)
+anova(model_100c)
+
+data_100 %>%
+  ggplot(aes(rfe_type, rfe_c)) +
+  geom_boxplot()
+
+data_100 %>%
+  filter(sid == 1) %>%
+  View()
+
+#Check mean centering worked
+data_100 %>% 
+  summarize(m_rfe_c = mean(rfe_c, na.rm = TRUE)) %>% 
+  round(5)
+
+model_50c <- lmer(rfe_c ~ rfe_type + (1 | sid),
+     data = data_50)
+summary(model_50c)
+anova(model_50c)
+#hard to get effect size from a mixed effects model, but I think taking deviations from means account for subject variance
+
+data_50 %>%
+  ggplot(aes(rfe_type, rfe_c)) +
+  geom_boxplot()
+
+# Models without mean centering
+
+model_100 <- lmer(rfe ~ rfe_type + (1 | sid),
+     data = data_100)
+
+summary(model_100)
+anova(model_100)
+
+
+model_50 <- lmer(rfe ~ rfe_type + (1 | sid),
+     data = data_50)
+anova(model_50)
+
+summary(model_50)
+anova(model_50)
+
+data_50 %>%
+  ggplot(aes(rfe_type, rfe)) +
+  geom_boxplot()
+```
+
+*Double check if I should mean center because I think it gets accumulates all of the subject data, but there's too much between subject variance, so the group mean doesn't really mean anything*
+# Nope mean centering didn't work, it mean centered by subject... But if it mean centered by subject, then can't we test the differences between those means? This means that it gave me the calculation that I wrote up on the board. rfe_c is now a measure of the size of the difference between fast and slow conditions, so we should be able to test those in a repeated measures test that accounts for between subject variability. Actually mean centering might be correct because now we're removing the differences in how much each subject was affected by the illusion and instead only measuring how much they differed from their own mean. If we don't mean center, one participant could be at a difference of .2 and .6 and another at a difference of 1.2 and 1.6 which are similar differences, but way different numbers. If we mean center, now we can say okay across all participants they all varied this much between the fast and slow conditions. But now this means that we aren't measuring the mean of fast vs mean of slow but rather the mean of differences so what are comparing those differences to? So we're calculating the size of the difference between the mean of fast vs mean of slow, so how do we say "the fast condition is significantly different from the small condition"
+*It's so close to being significant in the 50 condition. Showing a box plot of group stats isn't very useful, what graphs should I show?*
+*Maybe I should create a new variable that calculates deviations between individuals' own means (although its not pre-test/post-test...)*
+*look up what singular fit warning means*
+
+*try 2x2x2 anova, try fast and slow difference and compare to zero*
+*check if data is normally distributed and variance is homoscedastic*
+*the interaction wasn't significant because we weren't using the timing as factors but they were being used as continuous. Need to do factorial interaction analysis*
+
+```{r}
+# arrange the data
+subjects <- arrange(data_100, sid)
+```
+
+Linear Model
+
+```{r}
+alpha_model <- lm(rfe ~ rfe_type*probe_del_ms, data = data_rfe)
+summary(alpha_model)
+anova(alpha_model)
+
+alpha_model <- lm(rfe ~ rfe_type, data = data_rfe)
+summary(alpha_model)
+```
+
+```{r}
+data_trial <- alpha %>%
+  filter(reversal_num > 6,
+         reversal == 1) %>%
+  group_by(trial_variant, probe_del_ms, alpha_condition) %>%
+  summarise(mean(rod_tilt))
+
+excel_check <- data_rfe %>%
+  group_by(probe_del_ms, rfe_type) %>%
+  summarise(mean(rfe))
+```
+
+*try mixed effects ANVOA*
+*plot raw data*
+
+```{r}
+data_rfe2 %>%
+  gather(type, rfe, `rfe_fast_-100`,`rfe_slow_-100`,`rfe_fast_-50`,`rfe_slow_-50`) %>%
+  ggplot(aes(probe_delay_ms, rfe, fill = type))
+
+```
+
+```{r}
+## Generate RFE plot (group average)
+
+plot_RFE <- data_rfe %>%
+  select(sid, rfe_type, data) %>% 
+  unnest() %>% 
+  group_by(rfe_type, probe_del_ms) %>%
+  summarize(mean_rfe = mean(rfe),
+            se_rfe = sd(rfe) / sqrt(length(files))) %>%
+
+  
+  ggplot(aes(x = probe_del_ms, y = mean_rfe, group = rfe_type)) +
+  geom_vline(xintercept = 0, col = "grey29", linetype = 3, size = line_size) +
+  geom_line(aes(linetype = rfe_type), 
+            size = line_size,
+            color = "firebrick2") +
+  geom_errorbar(aes(ymin = mean_rfe - se_rfe, ymax = mean_rfe + se_rfe),
+                width = 1, size = 1.2, 
+                position = "dodge") + 
+  
+  geom_point(shape = 21, size = 4, fill = "white") +
+  
+  # scale_y_continuous(breaks = seq(-4, 3, by = 1)) +
+  ylab(expression(paste("PSE (",degree,")"))) +
+  xlab("\n Probe Lead                                      Probe Lag \n SOA (msec)") +
+  
+  theme_bw() +
+  
+  theme(axis.title = element_text(size = text_size))  +
+  theme(axis.text = element_text(size = text_size)) +
+  scale_colour_manual(values=colour) 
+
+plot_RFE
+
+```
+
+
+```{r}
+# data_rfe_thresh <- data_rfe %>% 
+#   select(sid, pse, height, thresh25)
+# 
+# 
+# data_rfe %>% 
+#   select(sid, curve_fit) %>% 
+#   unnest() %>% 
+#   
+#   ggplot(aes(x = x_val, y = y_val)) +
+#   geom_segment(data = data_rfe_thresh, aes(x = pse, y = 0, xend = pse, yend = (0.5 * height)),
+#                color = "grey24", linetype = "dashed") +
+#   geom_line(color = "firebrick3", size = line_size) +
+# 
+#   facet_wrap(~sid) +
+#   theme_bw()
+# 
+# 
+
+```
+
+#Change this to check if illusion effect is different between alpha conditions accounting for rod delay (or the interaction of rod delay)
+```{r}
+#testing if illusion effect is different between bright and dim accounting for rod delay
+data_rfe2 <- data_rfe %>%
+  select(sid, rfe_type, rfe, probe_del_ms) %>% 
+  unnest() %>% 
+  unite(type_time, rfe_type, probe_del_ms) %>% 
+  spread(type_time, rfe)
+
+#t-test for bright vs dim at various rod delay times
+t.test(data_rfe2$`rfe_fast_-100`, data_rfe2$`rfe_slow_-100`)
+t.test(data_rfe2$`rfe_fast_-50`, data_rfe2$`rfe_slow_-50`)
+
+#can also do a regression or MLM for rod_effect's influence on PSE
+
+```
+
+```{r}
+data_stats <- data_rfe %>%
+  select(sid, data) %>%
+  unnest()
+
+data_stats2 <- data_stats %>%
+  spread(probe_del_ms, rfe)
+# 
+# stats_200 <- data_stats %>% 
+#   filter(probe_del_ms == -200)
+# 
+# t.test(stats_200$rfe)
+# 
+# t.test(data_stats2$`200`, data_stats2$`-33`)
+# 
+# pairwise.t.test(data_stats$rfe, data_stats$probe_del_ms, p.adj = "bonferroni")
+# 
+write.table(data_stats, "rfi_timecourse_long.csv", row.names = FALSE, sep = ",")
+write.table(data_stats2, "rfi_timecourse_wide.csv", row.names = FALSE, sep = ",")
+
+```
+
+
+# Individual Level Analyses
+1) Staircases
+2) Individual psychometric functions fit to each SOA
+- Rod tilt x porportion rightward response (scale point size by n presentations)
+- How does fitted PSE compare with staircase derived PSE?
+3) Left vs. Right tilted frame conditions
+4) Smooth RFE time course
+
+
+Plot individual staircases and psychometric functions for each SOA and frame tilt
+
+
+```{r}
+x_plotlims2 <- -30:30
+
+raw_fits <- data_dim %>% 
+  group_by(sid, frame_orient, probe_del_ms) %>%
+  nest() %>% 
+  mutate(full_solution = map(data, ~optim(par = c(1, 1), 
+                                          psy_fun2, 
+                                          x_val = .$rod_tilt,
+                                          rsp = .$response)),
+         
+         # Pull out relevant parameters from full solution
+         pse = map_dbl(full_solution, ~.$par[1]),
+         
+         slope = map_dbl(full_solution, ~.$par[2]),
+         
+         residual = map_dbl(full_solution, "value"),
+         
+         curve_fit = map(full_solution, ~psy_plot2(x_val = x_plotlims2,
+                                                   pse = .$par[1],
+                                                   slope = .$par[2]))
+  )
+```
+
+
+
+```{r echo=FALSE, fig.width=6, fig.height=8,fig.show='hold',fig.align='center'}
+
+sids <- unique(data_dim$sid)
+
+
+for(i in 1:length(sids)){
+  
+  plt1 <- data_dim %>%
+    filter(sid == sids[i]) %>%
+    
+    ggplot(aes(x = trial_iteration_val, y = rod_tilt)) +
+    geom_line(aes(color = stair_approach), size = 1.3) +
+    facet_grid(probe_del_ms ~ frame_orient) +
+    ggtitle(sids[i])
+  
+  
+  indv_pts <- raw_fits %>%
+    filter(sid == sids[i]) %>% 
+    select(frame_orient, probe_del_ms, data) %>% 
+    unnest() %>%
+    select(frame_orient, probe_del_ms, rod_tilt, response) %>% 
+    group_by(frame_orient, probe_del_ms, rod_tilt) %>% 
+    summarize(m_resp = mean(response),
+              n = n())
+  
+  plt2 <- raw_fits %>% 
+    filter(sid == sids[i]) %>% 
+    select(frame_orient, probe_del_ms, curve_fit) %>% 
+    unnest() %>% 
+    
+    ggplot(aes(x = x_val, y = y_val)) + 
+    geom_line() +
+    geom_point(data = indv_pts, aes(x = rod_tilt, y = m_resp, size = n),
+               color = rightFrame_col, alpha = .6) +
+    facet_grid(probe_del_ms ~ frame_orient) +
+    
+    xlab("Rod Tilt") +
+    ylab("Proportion Respond Rightward") +
+    
+    ggtitle(sids[i])
+  
+  
+    print(plt1)
+    print(plt2)
+  
+}
+
+```
+
+
+With the given data, the PSE can be estimated in one of two ways:
+1) By determining the average rod tilt of the last six reversals
+2) By fitting psychometric functions to the raw responses
+
+Let's compare
+
+```{r}
+
+pse_compare <- raw_fits %>% 
+  select(sid, frame_orient, probe_del_ms, pse) %>% 
+  rename(pse_raw = pse) %>% 
+  
+  right_join(data_pse, by = c("sid", "frame_orient", "probe_del_ms")) %>% 
+  mutate(pse_diff = pse - pse_raw)
+
+
+
+pse_compare2 <- pse_compare %>% 
+  group_by(frame_orient, probe_del_ms) %>% 
+  summarize(mean_pse = mean(pse),
+            mean_pse_raw = mean(pse_raw),
+            mean_pse_diff = mean(pse_diff))
+
+mean(pse_compare$pse_diff)
+sd(pse_compare$pse_diff)
+
+plot(pse_compare$pse_diff)
+
+```
+
+
+
+```{r, SOA effect by individual}
+
+data_rfe %>% 
+  select(sid, data) %>% 
+  unnest() %>% 
+  
+  ggplot(aes(x = probe_del_ms, y = rfe, color = sid)) +          
+  geom_vline(xintercept = 0,         
+             col = "grey29", linetype = 3, size = line_size) +  
+  
+  geom_line(size = 1) +                     
+  geom_point(shape = 21, size = 4, fill = "white") + 
+  theme_bw() +                                       
+  
+  theme(plot.title = element_text(hjust = .5, size = text_size)) + 
+  theme(axis.title = element_text(size = text_size))  +           
+  theme(axis.text = element_text(size = text_size)) +              
+  
+  ylab(expression(paste("PSE (",degree,")"))) +                     
+  xlab("\n Probe Lead                                      Probe Lag \n SOA (msec)") 
+
+
+
+```
+
+
+
+```{r plots n shit}
+# x_plotlims2 <- seq(-800,1200)
+# 
+# model_a <- psy_plot(x_plotlims2, 350, 8.42, 4.38)
+# model_b <- psy_plot(x_plotlims2, -350, 36.42, 4.38)
+# 
+# ggplot(model_a, aes(x = x_val, y = y_val)) +
+#   geom_line(size = 1.6, col = "green4") +
+#   geom_line(data = model_b, aes(x = x_val, y = y_val),
+#             size = 1.6, col = "black") +
+#   
+#   
+#   geom_vline(xintercept = 0, col = "grey29", linetype = 3, size = line_size) +
+#   
+#   # scale_y_continuous(breaks = seq(-1, 4, by = 1)) +
+#   # scale_x_continuous(breaks = seq(-200, 600, by = 100)) +
+#   # coord_cartesian(xlim = c(-400, 650), ylim = c(0, 5), expand = FALSE) +
+#   # 
+#   theme_void()
+# 
+# 
+# # 350, 8.42
+
+
+```
+
+
+
+
+## Exploratory Analyses
+
+
+People with higher slope values (slower rise times) tended to have greater illusion magnitude. Earlier effect of the frame for these individuals? PSE is not correlated with slope or height. People with larger RFE had earlier 25% thresholds
+
+
+```{r}
+# fit.congru <- aov(congru_diff ~ as.factor(probe_del_ms) + Error(sid/probe_del_ms), 
+#                   data = data_congru)
+# summary(fit.congru)
+# 
+# TukeyHSD(fit.congru)
+# 
+# rfe_data <- data_rfe %>% 
+#   select(sid, data) %>% 
+#   unnest() 
+# 
+# fit0 <- aov(rfe ~ as.factor(probe_del_ms), data = rfe_data)
+# fit1 <- aov(rfe ~ as.factor(probe_del_ms) + Error(sid/probe_del_ms), data = rfe_data)
+# 
+# ttest_33 <- rfe_data %>% 
+#   filter(probe_del_ms == -67 | probe_del_ms == 0) %>% 
+#   spread(probe_del_ms, rfe)
+# 
+# t.test(ttest_33$`-67`, ttest_33$`0`)
+# 
+# summary(fit1)
+# 
+# TukeyHSD(fit0)
+# 
+# data_congru %>% 
+#   group_by(probe_del_ms) %>% 
+#   summarize(m_rt = mean(congru_diff)) %>% 
+#   
+#   ggplot(aes(x = probe_del_ms, y = m_rt)) +
+#   geom_bar(stat = "identity") 
+# 
+
+
+```
+
+
+
+
+```{r, RT x congruency effects}
+# 
+# correct_congru <- data_dim %>% 
+#   filter(rod_tilt != 0,
+#          correct == "correct",
+#          congruence == "congruent")
+# 
+# incorrect_congru <- data_dim %>% 
+#   filter(rod_tilt != 0,
+#          correct == "incorrect",
+#          congruence == "congruent")
+# 
+# 
+# 
+# t.test(correct_congru$rt, incorrect_congru$rt)
+# 
+# data_congru <- data_dim %>%
+#   filter(rod_tilt != 0,
+#          correct == "correct") %>% 
+#   
+#   group_by(sid, probe_del_ms, congruence) %>% 
+#   summarise(m_rt = mean(rt)) %>% 
+#   spread(congruence, m_rt) %>% 
+#   mutate(congru_diff = incongruent - congruent)
+# 
+# 
+# 
+# ggplot(data = data_congru, aes(x = probe_del_ms, y = congru_diff)) +
+#   geom_point()
+# 
+# data_pseCongru <- data_pse %>% 
+#   right_join(data_congru, by = c("sid", "probe_del_ms"))
+# 
+# 
+# cor.test(data_pseCongru$pse, data_pseCongru$congru_diff) # r = .38
+# 
+# 
+# data_pseCongru %>%
+#   gather(congru_effect, time, 5:7) %>% 
+#   filter(congru_effect == "congru_diff") %>% 
+#   group_by(probe_del_ms) %>% 
+#   summarize(m_congru0 = mean(time),
+#             se_rt = sd(time) / length(unique(data_dim$sid)),
+#             
+#             m_pse = mean(pse)) %>% 
+#   
+#   ggplot(aes(x = probe_del_ms, y = m_congru0)) +
+#   geom_bar(stat = "identity")
+# 
+# geom_bar(stat = "identity", position = "dodge") +
+#   geom_errorbar(aes(ymin = m_rt2 - se_rt, ymax = m_rt2 + se_rt),
+#                 width = .3, size = 1.2, 
+#                 position = "dodge")
+# 
+# conru_RErfe <- data_pse %>% 
+#   right_join(data_dim, by = c("sid", "probe_del_ms", "frame_orient")) %>% 
+#   mutate(congru_rfe = ifelse(rod_tilt < pse & frame_tilt == -15 |
+#                                rod_tilt > pse & frame_tilt == 15, "congruent", "incongruent" )) %>%
+#   group_by(probe_del_ms, congru_rfe) %>% 
+#   summarize(m_rt = mean(rt))
+# 
+
+```
+
+
+
+
