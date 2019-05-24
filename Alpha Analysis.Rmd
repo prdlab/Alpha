@@ -1,0 +1,154 @@
+---
+title: "Alpha Analysis"
+author: "Andrew Zavala"
+date: "5/23/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Libraries
+
+```{r Global Options, message=FALSE, warning=FALSE}
+library(tidyverse); library(ggthemes); library(rio); library(lsr); library(lme4); library(lmerTest); library(ez)
+```
+
+# Set Graph Template
+```{r, Graphics Tuner}
+line_size = 2.3
+leftFrame_col = "royalblue"
+rightFrame_col = "firebrick2"
+upFrame_col = "grey24"
+text_size = 22 
+colour <- c("royalblue", "firebrick2")
+```
+
+# Import Data
+
+```{r}
+study_dir <- "./subjects/"
+files <- list.files(study_dir)
+data_raw <- NULL
+
+for(i in 1:length(files)){
+  
+  data_raw <- import(paste0(study_dir, files[i]),
+                          na.strings = c("NULL")
+  ) %>%  
+    mutate(sid = i) %>% 
+    rbind(data_raw)
+}
+
+# Clean up the data
+alpha_data <- data_raw %>%  
+  janitor::clean_names() %>%
+  filter(trial_type == "real") %>% 
+  select(sid, everything()) %>% 
+  arrange(sid) %>%
+  mutate(probe_del_ms = round(probe_del * (16 + 2/3), 0),
+         alpha = ifelse(alpha_entrain_refreshes == 5, "Fast", "Slow"),
+         frame_orient = ifelse(frame_tilt == "-15", "Left", "Right"),
+         stair_approach = ifelse(substr(trial_variant,2,2) == "L", "Left", "Right"))
+
+# Trim down the data to what variables we want
+alpha_data <- alpha_data %>%
+  filter(reversal_num > 6,
+         reversal == 1) %>%
+  mutate(frame_orient = as.factor(frame_orient),
+         probe_del_ms = as.factor(probe_del_ms),
+         alpha = as.factor(alpha),
+         sid = as.factor(sid)) %>%
+  group_by(sid, frame_orient, probe_del_ms, alpha) %>% 
+  summarise(pse = mean(rod_tilt))
+
+# Factor Stuff
+alpha_data$alpha <- factor(alpha_data$alpha,levels(alpha_data$alpha)[c(2,1)])
+
+levels(alpha_data$alpha)
+levels(alpha_data$frame_orient)
+levels(alpha_data$probe_del_ms)
+```
+
+#Check normal dist and homogeneity of variance
+
+```{r}
+
+
+```
+
+# Check Sphericity
+
+```{r}
+spher <- ezANOVA(data = alpha_data,
+                   dv = pse,
+                   wid = sid,
+                   within = alpha,
+                   between = .(probe_del_ms, frame_orient))
+
+spher
+
+```
+
+#Initial Plot
+
+```{r}
+# Graph to see the trends, predicting that illusion effect gets smaller for fast condition
+alpha_data %>%
+  group_by(frame_orient, probe_del_ms, alpha) %>%
+  summarise(mean_pse = mean(pse),
+            se_pse = sd(pse) / sqrt(length(files))) %>%
+  ggplot(aes(alpha, mean_pse, color = frame_orient, group = frame_orient)) +
+  geom_point() +
+  geom_line() +
+  theme_minimal() +
+  facet_wrap(~probe_del_ms) + 
+  geom_point(shape = 21, size = 6, fill = "white") +
+  ylab(expression(paste("PSE (",degree,")"))) +
+  theme(axis.title = element_text(size = text_size))  +
+  theme(axis.title.x = element_blank()) +
+  theme(axis.text = element_text(size = text_size)) +
+  scale_colour_manual(values=colour) 
+
+```
+
+# Factorial ANOVA
+
+```{r}
+# Cell Means
+alpha_data %>%
+  group_by(probe_del_ms, frame_orient, alpha) %>% 
+  summarize(n = n(),
+            m_pse = mean(pse, na.rm = TRUE)) %>% 
+knitr::kable(digits = c(NA, NA, 0, 2, 2),
+             caption = "Cell Means & SD")
+
+```
+
+# Contrast Codes
+
+*Check if contrast codes are necessary to change here*
+```{r}
+contrasts(alpha_data$frame_orient)
+
+```
+
+
+# Run Analysis
+
+```{r}
+alpha_model <- lmer(pse ~ frame_orient*probe_del_ms*alpha + (1 | sid),
+     data = alpha_data)
+anova(alpha_model)
+summary(alpha_model)
+
+```
+
+
+
+
+
+

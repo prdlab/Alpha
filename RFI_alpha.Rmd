@@ -9,22 +9,18 @@ editor_options:
   chunk_output_type: console
 ---
 
-For posters, figure size = 6.5" (height) x 10" (width)
-
 ```{r Global Options, message=FALSE, warning=FALSE}
 library(tidyverse); library(ggthemes); library(rio); library(lsr)
 ```
 
 
 ```{r, Graphics Tuner}
-
 line_size = 2.3
 leftFrame_col = "royalblue"
 rightFrame_col = "firebrick2"
 upFrame_col = "grey24"
 text_size = 22 
 colour <- c("royalblue", "firebrick2")
-
 ```
 
 ```{r Import data, warning=FALSE, message=FALSE}
@@ -180,9 +176,6 @@ data_rfeabsval <- data_pse %>%
            probe_del_ms) %>%
   summarise(m.rfe = mean(rfe))
 ```
-
-*effect of difference between tilted frames*
-*try absolute value of left and average with right*
 
 Individual Graphs
 
