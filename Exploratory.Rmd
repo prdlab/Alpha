@@ -1,0 +1,75 @@
+---
+title: "Exploratory"
+author: "Andrew Zavala"
+date: "5/31/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+exp_data <- data_raw
+
+exp_data <- exp_data %>%
+  filter(TRIAL_TYPE == "real") %>%
+  select(-TRIAL_TYPE)
+```
+
+```{r}
+exp_datas1 <- exp_data %>%
+  filter(sid == 1) %>%
+  select(-c(RT, rod_tilt_val, TRIAL_NUMBER, TRIAL_ITERATION_VAL)) %>%
+  arrange(trial_variant)
+
+# bin the reversals in a histogram; for each rod tilt whats the likelihood there will be a reversal? For each rod tilt give me a count of reversal
+
+my_data <- exp_datas1 %>%
+  group_by(rod_tilt) %>%
+  summarise(reversal = sum(reversal))
+
+ggplot(my_data, aes(rod_tilt, reversal)) +
+  geom_bar(stat = "identity") + 
+  stat_smooth(method = "loess", se = FALSE, span = 0.8, fullrange = TRUE) +
+  xlim(-15,15)
+
+```
+
+# Subjects Graphs of Response to Illusion at Each Orientation
+
+```{r}
+# Make subject graphs
+
+# Group response graph of number of reversals at each orientation
+exp_data_subs <- exp_data %>%
+  select(-c(RT, rod_tilt_val, TRIAL_NUMBER, TRIAL_ITERATION_VAL)) %>%
+  arrange(trial_variant) %>%
+  group_by(rod_tilt, sid) %>%
+  summarise(reversal = sum(reversal))
+
+exp_data_subs %>%
+  ggplot(aes(rod_tilt, reversal)) +
+  geom_bar(stat = "identity") + 
+  stat_smooth(method = "loess", se = FALSE, span = 0.8, fullrange = TRUE) +
+  xlim(-15,15)
+
+# Subject Level
+
+subject_graphs <- exp_data_subs %>%
+  ggplot(aes(rod_tilt, reversal)) +
+  geom_bar(stat = "identity") + 
+  stat_smooth(method = "loess", se = FALSE, span = 0.8, fullrange = TRUE) +
+  xlim(-15,15) +
+  facet_wrap(~sid)
+subject_graphs
+
+# Split up graphs by fast and slow trials
+
+```
+
+
+
+

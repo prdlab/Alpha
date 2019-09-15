@@ -1,0 +1,79 @@
+---
+title: "RFI_alphaclean"
+author: "Andrew Zavala"
+date: "9/14/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Set Up
+
+```{r Global Options, message=FALSE, warning=FALSE}
+library(tidyverse); library(ggthemes); library(rio); library(lsr)
+```
+
+```{r, Graphics Tuner}
+
+line_size = 2.3
+leftFrame_col = "royalblue"
+rightFrame_col = "firebrick2"
+upFrame_col = "grey24"
+text_size = 22 
+colour <- c("royalblue", "firebrick2")
+
+```
+
+# Import Data
+
+```{r Import data, warning=FALSE, message=FALSE}
+setwd("/Users/MarekFirestone/Desktop/School/PRD Lab/Experiment stuff/Analysis/Experiment 1/Results Alpha/aaaaa")
+files <- list.files()
+data_raw <- NULL
+
+for(i in 1:length(files)){
+  
+  data_raw <- import(paste0(files[i]),
+                     na.strings = c("NULL")) %>% 
+    mutate(sid = i) %>%
+    rbind(data_raw)
+}
+```
+
+# Housekeeping
+
+```{r Housekeeping}
+
+# data_raw > alpha_data
+
+alpha_data <- data_raw %>%  
+  janitor::clean_names() %>%
+  filter(trial_type == "real") %>% 
+  select(sid, everything()) %>% 
+  arrange(sid) %>%
+  mutate(
+    probe_del_ms = round(probe_del * (16 + 2/3), 0),
+    
+    frame_orient = ifelse(frame_tilt == "-15", "Left", "Right"),
+    
+    stair_approach = ifelse(substr(trial_variant,2,2) == "L", "Left", "Right"),
+    
+    alpha_condition = ifelse(alpha_entrain_refreshes == 5, "Fast", "Slow"),
+    
+    alpha_condition = as.factor(alpha_condition))
+
+# Filter Reversals and Calculate PSE
+
+data_pse <- alpha_data %>%
+  filter(reversal_num > 6,
+         reversal == 1) %>%
+  group_by(sid, frame_orient, probe_del_ms, alpha_condition) %>% 
+  summarise(pse = mean(rod_tilt))
+
+```
+
+
+
+

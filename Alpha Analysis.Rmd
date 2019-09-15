@@ -128,26 +128,81 @@ knitr::kable(digits = c(NA, NA, 0, 2, 2),
 
 ```
 
+# Calculate PSE
+
+```{r}
+
+
+```
+
 # Contrast Codes
 
 *Check if contrast codes are necessary to change here*
 ```{r}
-contrasts(alpha_data$frame_orient)
+alpha_data_avg <- alpha_data %>%
+  unite("Group", c(frame_orient, alpha)) %>%
+  spread(Group, pse) %>%
+  mutate(rfe_fast = Right_Fast - Left_Fast,
+         rfe_slow = Right_Slow - Left_Slow) %>%
+  select(sid, probe_del_ms, rfe_fast, rfe_slow) %>%
+  gather(rfe_type, rfe, -c(sid, probe_del_ms)) %>%
+  unite("Group", c(probe_del_ms, rfe_type)) %>%
+  mutate(Group = as.factor(Group))
 
+levels(alpha_data_avg$Group)
+
+Alpha_100 <- c(1, -1, 0, 0)
+Alpha_50 <- c(0, 0, 1, -1)
+Fast_vs_Slow <- c(-1, 1, -1, 1)
+alpha_contrasts <- cbind(Alpha_100, Alpha_50, Fast_vs_Slow)
+
+contrasts(alpha_data_avg$Group) <- alpha_contrasts
+contrasts(alpha_data_avg$Group)
 ```
 
 
 # Run Analysis
 
 ```{r}
-alpha_model <- lmer(pse ~ frame_orient*probe_del_ms*alpha + (1 | sid),
+alpha_model <- lmer(pse ~ frame_orient*probe_del_ms*alpha + (1 + alpha | sid),
      data = alpha_data)
 anova(alpha_model)
 summary(alpha_model)
 
+# Why is this rank deficient
+alpha_avg_model <- lmer(rfe ~ Group + (1 | sid),
+     data = alpha_data_avg)
+anova(alpha_avg_model)
+summary(alpha_avg_model)
+
 ```
 
+```{r}
+# Plot
 
+alpha_data_avg %>%
+  group_by(Group) %>%
+  summarise(mean_rfe = mean(rfe)) %>%
+  ggplot(aes(Group, mean_rfe)) +
+  geom_bar(stat= "identity") +
+  theme_minimal()
+
+alpha_data %>%
+  unite("Group", c(frame_orient, alpha)) %>%
+  spread(Group, pse) %>%
+  mutate(rfe_fast = Right_Fast - Left_Fast,
+         rfe_slow = Right_Slow - Left_Slow) %>%
+  select(sid, probe_del_ms, rfe_fast, rfe_slow) %>%
+  gather(rfe_type, rfe, -c(sid, probe_del_ms)) %>%
+  group_by(rfe_type, probe_del_ms) %>%
+  summarise(mean_rfe = mean(rfe)) %>%
+  ggplot(aes(rfe_type, mean_rfe)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~probe_del_ms) +
+  theme_minimal()
+
+
+```
 
 
 
