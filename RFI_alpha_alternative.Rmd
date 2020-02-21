@@ -1,0 +1,193 @@
+---
+title: "RFI_alpha_alternative"
+author: "Andrew Zavala"
+date: "9/18/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Set Up
+
+```{r Global Options, message=FALSE, warning=FALSE}
+library(tidyverse); library(ggthemes); library(rio); library(lsr)
+library(lme4)
+library(lmerTest)
+library(RColorBrewer)
+```
+
+```{r, Graphics Tuner}
+
+line_size = 2.3
+leftFrame_col = "royalblue"
+rightFrame_col = "firebrick2"
+upFrame_col = "grey24"
+text_size = 22 
+colour <- c("royalblue", "firebrick2")
+
+```
+
+# Import Data
+
+```{r Import data, warning=FALSE, message=FALSE}
+setwd("/Users/MarekFirestone/Desktop/Repos/PRD Lab/Alpha/subjects")
+files <- list.files()
+data_raw <- NULL
+
+for(i in 1:length(files)){
+  
+  data_raw <- import(paste0(files[i]),
+                     na.strings = c("NULL")) %>% 
+    mutate(sid = i) %>%
+    rbind(data_raw)
+}
+```
+
+# Housekeeping
+
+```{r Housekeeping}
+
+# data_raw > alpha_data
+
+alpha_data <- data_raw %>%  
+  janitor::clean_names() %>%
+  filter(trial_type == "real") %>% 
+  select(sid, everything()) %>% 
+  arrange(sid) %>%
+  mutate(
+    probe_del_ms = round(probe_del * (16 + 2/3), 0),
+    
+    frame_orient = ifelse(frame_tilt == "-15", "Left", "Right"),
+    
+    stair_approach = ifelse(substr(trial_variant,2,2) == "L", "Left", "Right"),
+    
+    alpha_condition = ifelse(alpha_entrain_refreshes == 5, "Fast", "Slow"),
+    
+    alpha_condition = as.factor(alpha_condition))
+
+# Filter Reversals and select VOIs
+
+data_pse <- alpha_data %>%
+  filter(reversal_num > 6,
+         reversal == 1)
+#  select(sid, rod_tilt, probe_del_ms, alpha_condition, frame_orient)
+
+```
+
+## Analysis using rod_tilt values not averages
+
+```{r}
+
+data_pse <- data_pse %>%
+  unite(frame_col, "frame_orient", "alpha_condition", sep = "_")
+
+# Cool graph showing frequencies of rod tilts in each condition
+data_pse %>%
+  group_by(frame_col, sid, probe_del_ms) %>%
+  ggplot(aes(rod_tilt)) +
+  geom_histogram() +
+  facet_wrap(~frame_col)
+
+# Make a density plot of the rod tilts in each condition, use color blind colors
+
+levels(data_pse$frame_col) <- c("Left_Slow", "Right_Slow", "Right_Fast", "Left_Fast")
+
+data_pse %>%
+  ggplot(aes(x = rod_tilt, fill = frame_col)) +
+  geom_density(alpha = 0.7) +
+  facet_wrap(~probe_del_ms) +
+  theme_minimal()
+
+# Create Fast and Slow RFE dfs
+
+df_LF <- data_pse %>%
+  filter(frame_col == "Left_Fast") %>%
+  arrange(probe_del_ms)
+
+df_LS <- data_pse %>%
+  filter(frame_col == "Left_Slow") %>%
+  mutate(rod_tiltLS = rod_tilt) %>%
+  select(-rod_tilt) %>%
+  arrange(probe_del_ms)
+
+df_RF <- data_pse %>%
+  filter(frame_col == "Right_Fast") %>%
+  transform(rod_tiltRF = rod_tilt) %>%
+  select(-rod_tilt) %>%
+  arrange(probe_del_ms)
+
+df_RS <- data_pse %>%
+  filter(frame_col == "Right_Slow") %>%
+  mutate(rod_tiltRS = rod_tilt) %>%
+  select(-rod_tilt) %>%
+  arrange(probe_del_ms)
+
+df_Fast <- full_join(df_LF, df_RF, by = c("sid", "probe_del_ms"))
+
+df_Fast <- df_Fast %>%
+  mutate(rfe = rod_tiltRF - rod_tilt,
+         alpha_condition = rep("Fast", nrow(df_Fast))) %>%
+  select(-c(rod_tiltRF, rod_tilt, frame_col.x, frame_col.y))
+
+df_Slow <- full_join(df_LS, df_RS, by = c("sid", "probe_del_ms"))
+
+df_Slow <- df_Slow %>%
+  mutate(rfe = rod_tiltRS - rod_tiltLS,
+         alpha_condition = rep("Slow", nrow(df_Slow))) %>%
+  select(-c(rod_tiltLS, rod_tiltRS, frame_col.x, frame_col.y))
+
+# Combine Fast and Slow dfs into data_rt
+
+data_rt <- rbind(df_Slow, df_Fast)
+
+# Violin Plot
+
+ggplot(data_rt, aes(alpha_condition, rfe, color = alpha_condition)) +
+  geom_violin(trim = TRUE) +
+  stat_summary(fun.data = mean_sdl, 
+                 geom="pointrange", color="black") + 
+  facet_wrap(~probe_del_ms)
+
+
+```
+
+# Repeated Measures Analysis
+
+```{r}
+# Test if the values are significantly different in data_rf
+
+# With interaction
+
+model_1 <- lmer(rfe ~ alpha_condition + probe_del_ms + alpha_condition*probe_del_ms + (1 | sid),
+     data = data_rt)
+summary(model_1)
+anova(model_1)
+
+# Without accounting for interaction
+
+model_2 <- lmer(rfe ~ alpha_condition + probe_del_ms + (1 | sid),
+     data = data_rt)
+summary(model_2)
+anova(model_2)
+
+```
+
+# Plot all subjects' distributions
+
+```{r}
+data_rt %>%
+  ggplot(aes(rfe, color = sid, group = sid)) +
+  geom_smooth(stat = "count") +
+  theme_minimal() +
+  facet_wrap(~probe_del_ms)
+
+```
+
+
+
+
+

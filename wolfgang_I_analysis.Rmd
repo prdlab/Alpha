@@ -79,6 +79,24 @@ data_pse1 <- data_pse1 %>%
   summarise(pse = mean(rod_tilt))
 ```
 
+# Check if 6 reversals from 2 to 8 is enough instead of all 12
+
+```{r}
+
+# Check if 6 reversals is enough to get the effect
+
+data_rev <- alpha_data %>%
+  filter(reversal_num > 2 & reversal_num < 8,
+         reversal == 1)
+
+data_rev_clean <- data_rev %>%
+  group_by(sid, frame_orient, probe_del_ms, alpha_condition) %>%
+  summarise(pse = mean(rod_tilt))
+
+write.csv(data_rev_clean, file = "/Users/MarekFirestone/Desktop/Repos/PRD Lab/Alpha/data_rev_clean.csv")
+
+```
+
 # Plot data_pse
 
 ```{r}
@@ -315,7 +333,7 @@ trend_all <- data_rfe %>%
   ylab("Illusion Magnitude (˚)") +
   ggtitle("Individual Illusion Magnitude by Alpha Frequency") +
   theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
+  theme(plot.title = element_text(size = 20, hjust = 0.5))
 
 trend_all
 

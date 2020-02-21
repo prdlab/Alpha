@@ -1,0 +1,103 @@
+---
+title: "exploratory"
+author: "Andrew Zavala"
+date: "2/21/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse); library(rio); library(TSA); library(janitor); library(broom); library(lmSupport)
+```
+
+# Get data
+
+```{r}
+pilot <- list.files("pilot")
+frohlich_data <- NULL
+
+for (i in seq_along(pilot)) {
+  temp <- import(paste0("pilot/",pilot[i]))
+  frohlich_data <- rbind(frohlich_data, temp)
+}
+
+frohlich_data <- frohlich_data %>%
+  filter(Trial_Recycled_ == FALSE) %>%
+  select(c(Session_Name_, probe_delay, entrainment_type, DURATION, STARTING_ANGLE, MOUSE_ANGLE)) %>%
+  mutate(probe_delay = probe_delay*16.6666)
+
+frohlich_data$MOUSE_ANGLE <- ifelse(frohlich_data$MOUSE_ANGLE > 0, frohlich_data$MOUSE_ANGLE, frohlich_data$MOUSE_ANGLE + 360)
+
+frohlich_data <- frohlich_data %>%
+  mutate(illusion = MOUSE_ANGLE - STARTING_ANGLE)
+
+frohlich_data <- frohlich_data %>%
+  filter(illusion > -50 & illusion < 50)
+
+```
+
+```{r}
+
+# claudia only
+frohlich_claudia <- frohlich_data %>%
+  filter(Session_Name_ == "claudia") 
+
+ggplot(frohlich_claudia, aes(STARTING_ANGLE, illusion, group = as.factor(entrainment_type), color = as.factor(entrainment_type))) +
+  geom_jitter() +
+  geom_smooth(method = "loess") +
+  theme_minimal() +
+  ylab("Illusion Effect (˚)") +
+  xlab("Starting Angle of Motion (˚)")
+
+# make a model of bias
+
+claudia_bias <- lm(illusion ~ STARTING_ANGLE + entrainment_type,
+                   data = frohlich_claudia)
+
+claudia_bias %>%
+  ggplot(aes(.fitted, .resid)) +
+  geom_jitter()
+
+
+
+claudia_model_0 <- frohlich_data %>%
+  filter(Session_Name_ == "claudia") %>%
+  lm(illusion ~ probe_delay + as.factor(entrainment_type),
+     data = .)
+claudia_model_1 <- frohlich_data %>%
+  filter(Session_Name_ == "claudia") %>%
+  lm(illusion ~ probe_delay + as.factor(entrainment_type) + (STARTING_ANGLE),
+     data = .)
+```
+
+
+# stuff from 612
+
+```{r}
+modelCompare(claudia_model_0,
+             claudia_model_1)
+
+claudia_model_0 %>% # pass the model to tidy with a pipe
+  tidy() %>% # then tidy it
+  # rename estimate and statistic to be a bit more descriptive.
+  rename(b = estimate, # b for slope
+         t = statistic) %>% # t so we know it's a t value
+  # then put it in a table with knitr::kable()
+  knitr::kable(digits = c(NA, 2, 2, 2, 3))
+
+frohlich_claudia <- frohlich_data %>%
+  filter(Session_Name_ == "claudia") %>%
+  mutate(extra_resids = claudia_model_0$residuals)
+
+ggplot(data = claudia_model_0, aes(x = .fitted, y = .resid)) +
+  geom_point(stat = "identity")
+```
+
+
+
+
+
+
+
